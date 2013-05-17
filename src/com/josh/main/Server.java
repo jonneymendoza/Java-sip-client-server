@@ -9,11 +9,37 @@ import org.pjsip.pjsua.pjsua;
 
 /**
  * 
+ * Command line application client server that can send and receive SIP Messages
+ * 
  * @author Josh Solutions Limited
  * 
  */
 public class Server {
 
+	private static BufferedReader br;
+
+	private static String toUserName;
+
+	private static String toHost;
+
+	private static String toPort;
+
+	private static String message;
+
+	private static String fromHost;
+
+	private static String fromUsername = "Jonney";
+
+	private static String fromPort;
+
+	private static SipWrapper wrapper;
+
+	/**
+	 * Message thread used to send multiple messages.
+	 * 
+	 * Messages are sent by simply typing the text and hitting the enter key to
+	 * automatically send the message to the specified SIP address
+	 */
 	private static Thread messagingThread = new Thread(new Runnable() {
 
 		@Override
@@ -36,43 +62,37 @@ public class Server {
 		}
 	});;
 
-	private static BufferedReader br;
+	/**
+	 * The Message callback interface
+	 */
+	private static MessageInterface messageCallback = new MessageInterface() {
 
-	private static String toUserName;
+		@Override
+		public void onMessageSent(int statusCode) {
+			if ((statusCode >= 200) && (statusCode < 300)) {
+				// success. relay this back to the client
+				System.out.println("succesfuly sent message");
+			} else {
+				// error
+				System.out.println("message failed to send due to status code "
+						+ statusCode);
+			}
 
-	private static String toHost;
+		}
 
-	private static String toPort;
-
-	private static String message;
-
-	private static String fromHost;
-
-	private static String fromUsername = "Jonney";
-
-	private static String fromPort;
-
-	private static SipWrapper wrapper;
+		@Override
+		public void onMessageRecieved(String message, String from) {
+			System.out.println(from + " ---" + message);
+		}
+	};
 
 	/**
-	 * Initialise thread and sip stuff here
+	 * Setup the message to send by specifying the address to send a message and
+	 * executing the message sending thread
 	 */
-	private static void initialiseComponents() {
-		// Use JNI or some wrapper to initialise SIP components so we can listen
-		// out for request
-		// System.loadLibrary("pjsua");
-		// System.out.println("initialise components" + pjsua.create());
-		// pjsua.create();
-		System.out.println();
-		// setup thread with sip stuff to listen and respond to sip messages in
-		// a while loop.
-
-	}
-
 	private static void sendMessageToUser() {
 		try {
 
-			System.out.println("............");
 			System.out.println("............");
 			System.out.println("............");
 
@@ -101,35 +121,32 @@ public class Server {
 	}
 
 	/**
-	 * Start listening for sip requests
+	 * Start listening for sip messages and send messages
 	 * 
 	 * @param arg
 	 */
 	public static void main(String[] args) {
-		initialiseComponents();
 
-		System.out
-				.println("welcome to the sip java client-server app \nBelow are your ip and port details");
+		System.out.println("welcome to the sip java client-server app"
+				+ " \nBelow are your ip  details");
 		// get ip address
 		InetAddress ip;
 		try {
 			br = new BufferedReader(new InputStreamReader(System.in));
-			// TODO: fix issue where it seems to retrieve the virtual machine IP
-			// address and not the laptops wifi one
+
 			ip = InetAddress.getLocalHost();
 			fromHost = ip.getHostAddress();
-			//fromHost = "192.168.43.227";
-			System.out.println("Please enter Your port");
+
+			System.out.println("Please enter your port you wish to recieve messages");
 			fromPort = br.readLine();
-			wrapper = new SipWrapper(fromHost, Integer.parseInt(fromPort));
-			// fromHost = "172.29.168.113";
+			wrapper = new SipWrapper(fromHost, Integer.parseInt(fromPort),
+					messageCallback);
+
 			System.out.println("Current IP address : " + fromHost);
 
-			// TODO: Create a nice usable optios ui so user can eiither send
-			// messages or listen for messages
 			System.out.println("Options: ");
-			System.out.println("S = Send message to user");
-			System.out.println("R = Liste for messages");
+			System.out.println("S = Send and receive messags from a user");
+			System.out.println("R = Listen for messages only");
 
 			System.out.println("Enter key to exectue a certain option");
 
@@ -138,20 +155,25 @@ public class Server {
 			if (value == Option.SEND_MESSAGE_TO_A_USER.getOption()) {
 				sendMessageToUser();
 			} else if (value == Option.LISTEN_FOR_MESSAGES.getOption()) {
+				System.out.println("Recieving messages..");
 				return;
 			} else if (value == Option.EXIT.getOption()) {
 				System.exit(0);
 			}
 
 		} catch (Exception e1) {
-			// TODO Auto-generated catch block
+
 			e1.printStackTrace();
 		}
 
-		// listenerThread.start();
-
 	}
 
+	/**
+	 * Enum class used to choose different options in the application
+	 * 
+	 * @author Josh Solutions Limited
+	 * 
+	 */
 	private enum Option {
 		SEND_MESSAGE_TO_A_USER('S'), LISTEN_FOR_MESSAGES('R'), EXIT('E');
 

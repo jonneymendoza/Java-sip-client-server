@@ -30,6 +30,10 @@ import javax.sip.message.Response;
  * Sip wrapper class that creates a sip object that can be used to send and
  * recieve messages.
  * 
+ * The Sip Wrapper class takes the relivent details that specify where to send the message to and who has sent the message, ie the users own details.
+ * 
+ * A simple call to {@link #sendMessage(String, String, int, String, String)} will send the message using SIP protocol
+ * 
  * @author Josh Solutions Limited
  * 
  */
@@ -45,8 +49,9 @@ public class SipWrapper implements SipListener {
 	private SipFactory sipFactory;
 	private SipStack sipStack;
 	private SipProvider sipProvider;
-	private Properties properties;
+	private Properties sipProperties;
 	private MessageFactory messageFactory;
+	private MessageInterface messageCallback;
 
 	/**
 	 * Setup SIP and its listeners
@@ -55,32 +60,41 @@ public class SipWrapper implements SipListener {
 	 *            The Host IP you wish to receive SIP requests
 	 * @param fromPort
 	 *            The Port you wish to receive SIP requests
+	 * 
+	 * @param messageCallback
+	 *            The messageCallback interface
 	 * @throws PeerUnavailableException
 	 */
-	public SipWrapper(String fromHost, int fromPort)
-			throws PeerUnavailableException {
+	public SipWrapper(String fromHost, int fromPort,
+			MessageInterface messageCallback) throws PeerUnavailableException {
 
-		properties = new Properties();
+		this.messageCallback = messageCallback;
+		sipProperties = new Properties();
 		this.fromHost = fromHost;
 		this.fromPort = fromPort;
 		sipFactory = SipFactory.getInstance();
 		messageFactory = sipFactory.createMessageFactory();
 
-		properties.setProperty("javax.sip.STACK_NAME", "TextClientServer");
+		sipProperties.setProperty("javax.sip.STACK_NAME", "TextClientServer");
 
-		properties.setProperty("javax.sip.IP_ADDRESS", fromHost);
-		sipStack = sipFactory.createSipStack(properties);
+		sipProperties.setProperty("javax.sip.IP_ADDRESS", fromHost);
+		sipStack = sipFactory.createSipStack(sipProperties);
 		createSipListeners();
 	}
 
 	/**
 	 * Send a SIP message
 	 * 
-	 * @param toUsername The username to send to
-	 * @param toHost  The Host IP address to send to
-	 * @param toPort The port to send to
-	 * @param fromUsername The clients username
-	 * @param message The Message content
+	 * @param toUsername
+	 *            The username to send to
+	 * @param toHost
+	 *            The Host IP address to send to
+	 * @param toPort
+	 *            The port to send to
+	 * @param fromUsername
+	 *            The clients username
+	 * @param message
+	 *            The Message content
 	 * @throws Exception
 	 */
 	public void sendMessage(String toUsername, String toHost, int toPort,
@@ -92,7 +106,7 @@ public class SipWrapper implements SipListener {
 
 		this.fromUsername = fromUsername;
 
-		SipMessage sipMessage = new SipMessage(sipFactory, properties,
+		SipMessage sipMessage = new SipMessage(sipFactory, sipProperties,
 				sipProvider, toUsername, toHost, toPort, fromUsername,
 				fromHost, fromPort);
 
@@ -140,6 +154,9 @@ public class SipWrapper implements SipListener {
 
 	}
 
+	/**
+	 * Process the request received from other SIP clients
+	 */
 	@Override
 	public void processRequest(RequestEvent evt) {
 		Request request = evt.getRequest();
@@ -147,16 +164,17 @@ public class SipWrapper implements SipListener {
 
 		if (method.endsWith(Request.MESSAGE)) {
 			// got a message. lets see whats inside it
-			System.out.println(".................");
-			System.out.println(new String(request.getRawContent()));
 			FromHeader from = (FromHeader) request.getHeader("From");
-			System.out.println(from.getAddress().toString());
 
-			// RESPONSE
+			messageCallback.onMessageRecieved(
+					new String(request.getRawContent()), from.getAddress()
+							.toString());
+
+			// response
 			Response response = null;
 
 			try {
-
+				//send response to say we have received the message successfully
 				response = messageFactory.createResponse(200, request);
 				ToHeader toHeader = (ToHeader) response
 						.getHeader(ToHeader.NAME);
@@ -177,16 +195,12 @@ public class SipWrapper implements SipListener {
 	@Override
 	public void processResponse(ResponseEvent evt) {
 		Response response = evt.getResponse();
+		
 
 		int status = response.getStatusCode();
-		if ((status >= 200) && (status < 300)) {
-			// success. relay this back to the client
-			System.out.println("succesfuly sent message");
-		} else {
-			// error
-			System.out.println("message failed to send due to status code "
-					+ status);
-		}
+		
+		messageCallback.onMessageSent(status);
+		
 
 	}
 
